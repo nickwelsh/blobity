@@ -21,6 +21,8 @@ export type Options = {
     font: string;
     fontWeight: number;
     fontSize: number;
+    maxLineSize?: number;
+    lineHeight: number;
     fontColor: string;
     tooltipPadding: number;
     kineticMorphing: boolean;
@@ -49,6 +51,7 @@ export default class Blobity {
         font: 'sans-serif',
         fontWeight: 400,
         fontSize: 40,
+        lineHeight: 44,
         fontColor: '#000000',
         tooltipPadding: 12,
         kineticMorphing: true,
@@ -561,14 +564,49 @@ export default class Blobity {
         this.ctx.textAlign = 'left';
         const { actualBoundingBoxAscent, width } = this.ctx.measureText(text);
         const padding = this.options.tooltipPadding * 2;
+        let maxWidth = 0;
+        let totalHeight = 0;
+
+        if (this.options.maxLineSize) {
+            const maxLineSize = this.options.maxLineSize * this.options.fontSize;
+            const words = text.split(' ');
+            let line = '';
+            const lines = words.map(word => {
+                const { width } = this.ctx.measureText(`${line}${word} `);
+                if (width > maxLineSize) {
+                    const result = line
+                    line = `${word} `;
+                    return result;
+                } else {
+                    line += `${word} `;
+                    return null;
+                }
+            }).filter(Boolean);
+
+            lines.length == 0
+                ? maxWidth = this.ctx.measureText(line).width
+                : lines.forEach(line => {
+                        if (line) {
+                            const { actualBoundingBoxAscent, width } = this.ctx.measureText(line);
+                            if (width > maxWidth) {
+                                maxWidth = width / 2;
+                            }
+                            totalHeight += actualBoundingBoxAscent + this.options.lineHeight;
+                        }
+                    });
+            totalHeight += padding * (lines.length == 0 ? 1.5 : lines.length - 1);
+        } else {
+            maxWidth = width;
+            totalHeight = actualBoundingBoxAscent + padding;
+        }
 
         this.kinetInstance[this.kinetDefaultMethod]('textOpacity', 100);
         this.morph(
             {
                 x: x + 6,
                 y: y + 6,
-                width: width + padding,
-                height: actualBoundingBoxAscent + padding,
+                width: maxWidth + padding,
+                height: totalHeight,
             },
             4
         );
@@ -734,7 +772,7 @@ export default class Blobity {
 
             const cumulativeVelocity = activateBlur
                 ? Math.min(
-                      Math.sqrt(
+                  Math.sqrt(
                           Math.pow(Math.abs(velocityX), 2) +
                               Math.pow(Math.abs(velocityY), 2)
                       ) * 2, // so the distortion starts sooner
@@ -793,15 +831,50 @@ export default class Blobity {
                 ctx.fillStyle = `rgba(
                     ${this.fontColor.r}, ${this.fontColor.g}, 
                     ${this.fontColor.b}, ${textOpacity / 100})`;
-                ctx.fillText(
-                    this.activeTooltip,
-                    this.options.tooltipPadding * window.devicePixelRatio -
-                        ((scale - 100) / 100) * width,
-                    this.options.tooltipPadding * window.devicePixelRatio -
-                        ((scale - 100) / 100) * height
-                );
+                this.options.maxLineSize
+                    ? this.setTooltipText(this.activeTooltip, scale, this.options.maxLineSize)
+                    : ctx.fillText(
+                        this.activeTooltip,
+                        this.options.tooltipPadding * window.devicePixelRatio -
+                            ((scale - 100) / 100) * width,
+                        this.options.tooltipPadding * window.devicePixelRatio -
+                            ((scale - 100) / 100) * height
+                    );
             }
         }
+    }
+
+    private setTooltipText = (text: string, scale: number, maxLineSize: number) => {
+        const dpr = window.devicePixelRatio;
+        const padding = this.options.tooltipPadding * dpr;
+        const words = text.split(' ');
+        let x = padding;
+        let y = padding;
+        let line = '';
+        const lines = words.map(word => {
+            const { actualBoundingBoxAscent, width } = this.ctx.measureText(`${line}${word} `);
+            if (width > maxLineSize * this.options.fontSize) {
+                const result = {text: line.trim(), width, y};
+                y += actualBoundingBoxAscent + padding + this.options.lineHeight;
+                line = `${word} `;
+                return result;
+            } else {
+                line += `${word} `;
+                return null;
+            }
+        }).filter(Boolean);
+
+        const maxWidth = lines.length == 0
+            ? this.ctx.measureText(text).width
+            : Math.max(...lines.map(line => line?.width ? line.width : 0));
+
+        lines.length == 0
+            ? this.ctx.fillText(text, x - ((scale - 100) / 100) * maxWidth, y)
+            : lines.forEach(line => {
+                if (line) {
+                    this.ctx.fillText(line.text, x - ((scale - 100) / 100) * maxWidth, line.y);
+                }
+            });
     }
 
     private resize = () => {

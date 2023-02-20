@@ -31,6 +31,7 @@ export const initiaBlobityOptions = {
         '[data-blobity], a:not([data-no-blobity]), button:not([data-no-blobity]), [data-blobity-tooltip]',
     font: "'Montserrat','Source Sans Pro',-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif",
     fontSize: 14,
+    lineHeight: 20,
     fontWeight: 400,
     opacity: 1,
     // zIndex: 10, mnhkjhk
